@@ -1,0 +1,27 @@
+[project]
+name = "scorecheck"
+version = "0.1.0"
+description = "Adjudicate a published benchmark claim against its raw run-logs: REPRODUCED / DID-NOT-REPRODUCE / CHERRY-PICKED, sealed and re-runnable"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  # GitHub-pinned (our own packages; not on PyPI). They install together cleanly (verified).
+  "verity-core @ git+https://github.com/StellarRequiem/verity-core",
+  "calibration-log @ git+https://github.com/StellarRequiem/calibration-log",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+scorecheck = "scorecheck.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["scorecheck"]
