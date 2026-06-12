@@ -137,6 +137,77 @@ def test_prove_passes_then_catches_a_number_that_does_not_rederive(tmp_path, mon
     assert main(["prove", "--receipt", str(receipt)]) == 2
 
 
+# ---- G4 Prove-It regressions: the adversarial breaks are closed ----
+def test_g4_lowrate_fabrication_now_flagged():
+    """FALSE-NEGATIVE break: claim 0.40% when raw is 0.00% used to pass REPRODUCED (fixed 0.5pp tolerance)."""
+    source = {f"i{n}": "unresolved" for n in range(1000)}             # 0.00%
+    claim = {"name": "lowrate", "positive": "resolved", "value_x10000": 40, "published": dict(source)}
+    assert adjudicate(claim, source)["verdict"] == DID_NOT_REPRODUCE
+
+
+def test_g4_two_percent_inflation_now_flagged():
+    """FALSE-NEGATIVE break: 25.49% vs 25.00% (0.49pp ≈ 2% rel) passed under the old fixed tolerance."""
+    source = {f"i{n}": ("resolved" if n < 250 else "unresolved") for n in range(1000)}   # 25.00%
+    claim = {"name": "infl", "positive": "resolved", "value_x10000": 2549, "published": dict(source)}
+    assert adjudicate(claim, source)["verdict"] == DID_NOT_REPRODUCE
+
+
+def test_g4_legit_rounding_still_reproduces():
+    """Don't over-correct: a vendor reporting 25.00% when exact is 25.04% must still REPRODUCE."""
+    source = {f"i{n}": ("resolved" if n < 2504 else "unresolved") for n in range(10000)}  # 25.04%
+    claim = {"name": "round", "positive": "resolved", "value_x10000": 2500, "published": dict(source)}
+    assert adjudicate(claim, source)["verdict"] == REPRODUCED
+
+
+def test_g4_outcome_case_and_whitespace_no_longer_false_positive():
+    """FALSE-POSITIVE break: honest claim with cosmetic case/whitespace diffs was flagged CHERRY-PICKED."""
+    source = {"a": "resolved", "b": "unresolved"}
+    published = {"a": "Resolved ", "b": "\tUNRESOLVED"}               # same truth, cosmetic only
+    claim = {"name": "casing", "positive": "resolved", "value_x10000": 5000, "published": published}
+    assert adjudicate(claim, source)["verdict"] == REPRODUCED
+
+
+def test_g4_seal_forgery_caught_by_rederive_from_inputs(tmp_path):
+    """SEAL break: forging the verdict + recomputing the unkeyed root passes the corruption check —
+    but RE-DERIVING from the committed inputs catches it (the honest verification path)."""
+    from scorecheck.seal import _root
+    from scorecheck.cli import main
+    src = {"a": "resolved", "b": "unresolved"}
+    claim = {"name": "x", "positive": "resolved", "value_x10000": 5000, "published": dict(src)}
+    receipt = tmp_path / "r.json"
+    seal(adjudicate(claim, src), src, claim, str(receipt), str(tmp_path / "l.jsonl"))
+    r = json.loads(receipt.read_text())
+    r["scorecard"]["verdict"] = CHERRY_PICKED                        # forge the verdict
+    r["root"] = _root(r["scorecard"], r["inputs_sha256"])           # attacker recomputes the unkeyed root
+    receipt.write_text(json.dumps(r))
+    assert verify_receipt(str(receipt))[0]                           # corruption check still passes (honest limit)
+    cf = tmp_path / "c.json"; cf.write_text(json.dumps(claim))
+    lf = tmp_path / "logs.json"; lf.write_text(json.dumps(src))      # json_map
+    # re-derive from the real inputs → the forged verdict does NOT reproduce → exit 1
+    assert main(["verify", "--receipt", str(receipt), "--claim", str(cf), "--logs", str(lf),
+                 "--harness", "json_map"]) == 1
+
+
+def test_g4_proof_binding_catches_swapped_logs(tmp_path, monkeypatch):
+    """PROOF break: pointing `prove` at a different logs file with the SAME rate used to PASS;
+    the source-hash binding now catches the swap → REFUSE."""
+    import os, sys
+    from scorecheck.cli import main
+    monkeypatch.setenv("PATH", os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"])
+    src = {f"i{n}": ("resolved" if n < 5 else "unresolved") for n in range(10)}   # 50%
+    claim = {"name": "x", "positive": "resolved", "value_x10000": rate_x10000(src, "resolved"),
+             "published": dict(src)}
+    cf = tmp_path / "c.json"; cf.write_text(json.dumps(claim))
+    logs = tmp_path / "logs.json"; logs.write_text(json.dumps(src))
+    receipt = tmp_path / "r.json"
+    assert main(["adjudicate", "--claim", str(cf), "--logs", str(logs), "--harness", "json_map",
+                 "--receipt", str(receipt), "--ledger", str(tmp_path / "l.jsonl")]) == 0
+    assert main(["prove", "--receipt", str(receipt)]) == 0          # honest → PASS
+    swapped = {f"j{n}": ("resolved" if n < 5 else "unresolved") for n in range(10)}   # diff IDs, same 50%
+    logs.write_text(json.dumps(swapped))
+    assert main(["prove", "--receipt", str(receipt)]) == 2          # source-binding catches the swap
+
+
 # ---- invariants ----
 def test_exit_code_ladder():
     assert (exit_code(REPRODUCED), exit_code(DID_NOT_REPRODUCE), exit_code(CHERRY_PICKED)) == (0, 1, 2)

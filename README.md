@@ -36,7 +36,14 @@ number — `scorecheck prove` re-derives it from the raw logs via `verity prove`
   — *not* "a hash chain" or "re-run a benchmark," both of which are owned. We lead with the adjudication.
 - A claim is only as checkable as the harness's logs are mappable. The `swebench` adapter is ~3 lines
   (verified on a real `results.json`); each harness family needs its own thin adapter (`scorecheck/adapters.py`).
-- Float-free by construction (rates are integers ×10000), so a verdict is byte-reproducible and sealable.
+- Float-free by construction (rates are integers ×10000, round-half-up), so a verdict is byte-reproducible.
+- **The seal is a commitment, not a signature.** The receipt root is unkeyed: `verify` (receipt-only) detects
+  corruption, not a determined forger who recomputes it. Real verification re-derives from the committed
+  inputs — `scorecheck verify --claim claim.json --logs runs.json` — and standing integrity needs the root
+  published/anchored. (Hardened in G4; see `G4-NOTES.md`.)
+- The headline-number check uses a **relative** tolerance (max of 0.10pp and 1% of the true rate) so honest
+  vendor rounding passes but low-rate fabrication is caught; `reconcile` (selective-reporting) is the primary
+  guard, the number check is secondary. Outcome labels are normalised (case/whitespace) before comparison.
 
 ## Status
 **G3 hardened** — `adjudicate`/`verify`/`recompute`/`prove` end-to-end on a **real** SWE-bench results file;

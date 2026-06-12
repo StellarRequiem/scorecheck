@@ -1,9 +1,16 @@
-"""Seal a verdict into a tamper-evident receipt and re-derive it — so a skeptic can check the
-adjudication wasn't silently re-based on different inputs.
+"""Seal a verdict into a receipt that COMMITS to a hash of the exact (claim, source) inputs, and
+record it on an append-only `AuditChain`.
 
-Reuses `verity-core`'s canonical-JSON→sha256 `entry_hash` + append-only `AuditChain` (we do NOT roll our
-own crypto; tamper-evident hash chains are not the novel part — the adjudication is). The receipt commits
-to a hash of the EXACT (claim, source) inputs, so changing either after the fact breaks `verify`.
+Honest threat model (G4 made this precise — do not overstate it): the receipt root is an UNKEYED hash, so
+`verify_receipt` detects CORRUPTION and naive edits, but is NOT forgery-proof on its own — anyone who
+controls the receipt can change a field and recompute the root. Real verification therefore RE-DERIVES the
+verdict from the committed inputs (`scorecheck verify --claim <f> --logs <f>`), which a forger can't fake
+without supplying inputs that actually produce the verdict (and doctored inputs are caught by reconcile).
+Standing integrity over time additionally requires PUBLISHING/anchoring the root (or HMAC/signing it) so a
+third party has a trusted reference — the unkeyed seal alone is a commitment, not a signature.
+
+Reuses `verity-core`'s canonical-JSON→sha256 `entry_hash` + `AuditChain` (we do NOT roll our own crypto;
+the hash chain is not the novel part — the adjudication is).
 """
 from __future__ import annotations
 
@@ -36,7 +43,9 @@ def seal(scorecard: dict, source: dict, claim: dict, receipt_path: str, ledger_p
 
 
 def verify_receipt(receipt_path: str) -> tuple[bool, str]:
-    """Re-derive the receipt root from its own contents — must match (catches a doctored receipt)."""
+    """Re-derive the receipt root from its own contents — catches CORRUPTION / naive edits, NOT a forger who
+    recomputes the unkeyed root (see module docstring). For real verification, re-derive from the committed
+    inputs: `scorecheck verify --claim --logs`."""
     r = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
     recomputed = _root(r["scorecard"], r["inputs_sha256"])
     ok = recomputed == r["root"]
