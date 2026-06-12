@@ -4,7 +4,11 @@ on: [push, pull_request]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # byte-determinism across OS (verdicts/receipts are float-free)
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -14,8 +18,10 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Unit tests
         run: pytest -q
-      - name: Worked example — honest REPRODUCED (exit 0), doctored CHERRY-PICKED (exit 2), receipt verifies
+      - name: Worked example — honest REPRODUCED (exit 0), doctored CHERRY-PICKED (exit 2), receipt verifies, proof re-runs
         run: |
           scorecheck adjudicate --claim fixtures/claim_honest.json --logs fixtures/swebench_rag_gpt4_results.json --harness swebench --receipt /tmp/h.json
+          scorecheck verify --receipt /tmp/h.json
+          scorecheck prove  --receipt /tmp/h.json   # proof-carrying: re-runs the recompute via verity, PASS iff the number re-derives
           scorecheck adjudicate --claim fixtures/claim_doctored.json --logs fixtures/swebench_rag_gpt4_results.json --harness swebench --receipt /tmp/d.json && { echo "doctored should have exited 2"; exit 1; } || echo "doctored correctly flagged (exit 2)"
           scorecheck verify --receipt /tmp/d.json

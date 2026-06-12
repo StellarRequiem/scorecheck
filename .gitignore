@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 receipt.json
 *.receipt.json
+
+.coverage
+.pytest_cache/

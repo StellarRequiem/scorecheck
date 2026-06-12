@@ -6,27 +6,64 @@ function per harness family. The canonical SWE-bench case is ~3 lines (verified 
 """
 from __future__ import annotations
 
+import csv as _csv
 import json
 from pathlib import Path
 
 
+class AdapterError(ValueError):
+    """A raw-log file is missing, unreadable, or not in the adapter's expected shape."""
+
+
+def _text(logs_path: str) -> str:
+    p = Path(logs_path)
+    if not p.is_file():
+        raise AdapterError(f"raw-logs file not found: {logs_path}")
+    return p.read_text(encoding="utf-8")
+
+
 def swebench(logs_path: str, positive: str = "resolved") -> dict:
     """SWE-bench ``results.json``: ``generated`` (all attempted) + ``resolved`` (passed) → {id: outcome}."""
-    raw = json.loads(Path(logs_path).read_text(encoding="utf-8"))
-    generated, won = set(raw["generated"]), set(raw["resolved"])
-    return {iid: (positive if iid in won else "unresolved") for iid in generated}
+    try:
+        raw = json.loads(_text(logs_path))
+        generated, won = set(raw["generated"]), set(raw["resolved"])
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        raise AdapterError(f"not a SWE-bench results.json (need 'generated' + 'resolved'): {e}") from e
+    return {str(iid): (positive if iid in won else "unresolved") for iid in generated}
 
 
 def jsonl(logs_path: str) -> dict:
     """Generic: one JSON object per line carrying ``id`` + ``outcome`` → {id: outcome}."""
     out = {}
-    for line in Path(logs_path).read_text(encoding="utf-8").splitlines():
+    for n, line in enumerate(_text(logs_path).splitlines(), 1):
         line = line.strip()
         if not line:
             continue
-        o = json.loads(line)
-        out[str(o["id"])] = str(o["outcome"])
+        try:
+            o = json.loads(line)
+            out[str(o["id"])] = str(o["outcome"])
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise AdapterError(f"jsonl line {n}: need a JSON object with 'id' + 'outcome': {e}") from e
     return out
 
 
-ADAPTERS = {"swebench": swebench, "jsonl": jsonl}
+def csv(logs_path: str) -> dict:
+    """Generic CSV with an ``id`` column + an ``outcome`` column (header row) → {id: outcome}."""
+    try:
+        return {str(r["id"]): str(r["outcome"]) for r in _csv.DictReader(_text(logs_path).splitlines())}
+    except (KeyError, TypeError) as e:
+        raise AdapterError(f"CSV needs 'id' + 'outcome' columns: {e}") from e
+
+
+def json_map(logs_path: str) -> dict:
+    """Generic: a single JSON object mapping ``{id: outcome}`` directly → {id: outcome}."""
+    try:
+        raw = json.loads(_text(logs_path))
+        if not isinstance(raw, dict):
+            raise TypeError("expected a JSON object {id: outcome}")
+    except (json.JSONDecodeError, TypeError) as e:
+        raise AdapterError(f"not a JSON {{id: outcome}} map: {e}") from e
+    return {str(k): str(v) for k, v in raw.items()}
+
+
+ADAPTERS = {"swebench": swebench, "jsonl": jsonl, "csv": csv, "json_map": json_map}

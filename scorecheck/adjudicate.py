@@ -71,3 +71,25 @@ def adjudicate(claim: dict, source: dict, *, tolerance_x10000: int = 50) -> dict
 
 def exit_code(verdict: str) -> int:
     return _RANK.get(verdict, 1)
+
+
+# ── proof-carrying: the recomputed-from-raw number ships a re-runnable proof ──
+# A scorecheck verdict asserts ``recomputed_from_source_x10000`` (the honest number, from the raw logs).
+# ``verity prove`` closes the gap between *asserting* and *proving* it: the receipt carries a ``proof``
+# command (``scorecheck recompute …``) that re-derives the number; ``scorecheck prove`` RUNS it via
+# verity and PASSES only if it reproduces. So a skeptic doesn't trust our number — they re-run it.
+
+def proof_command(logs_path: str, harness: str, positive: str) -> str:
+    """The committed re-runnable recipe for the honest number — a ``scorecheck recompute`` invocation."""
+    return f"scorecheck recompute --logs {logs_path} --harness {harness} --positive {positive}"
+
+
+def build_proof_claim(card: dict, logs_path: str, harness: str, positive: str) -> dict:
+    """A ``verity.prove``-shaped claim: re-run the recompute, assert it matches the sealed number (exact)."""
+    return {
+        "name": card.get("name", "?"),
+        "metric": "recomputed_x10000",
+        "value": int(card["recomputed_from_source_x10000"]),
+        "proof": proof_command(logs_path, harness, positive),
+        "tolerance": 0,
+    }

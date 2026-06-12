@@ -22,9 +22,14 @@ pip install -e .
 
 scorecheck adjudicate --claim claim.json --logs runs.json --harness swebench
 #   [CHERRY-PICKED] rag_gpt4 — claimed 8.00% vs raw 2.80%  (reconcile: 40 MISSING · 1 FLIPPED · 0 EXTRA)  receipt=3f9c…
-scorecheck verify --receipt receipt.json     # re-derive the sealed root; exit 0 iff intact
+scorecheck verify  --receipt receipt.json    # re-derive the sealed root; exit 0 iff intact
+scorecheck prove   --receipt receipt.json    # proof-carrying: re-runs the recompute via `verity prove` — PASS iff the honest number re-derives from the raw logs
 ```
 Exit code = verdict (`0` REPRODUCED · `1` DID-NOT-REPRODUCE · `2` CHERRY-PICKED) — gate it in CI.
+
+Harness adapters (raw logs → `{id: outcome}`), all deliberately thin: `swebench` · `jsonl` · `csv` · `json_map`.
+**Proof-carrying:** the receipt seals a re-runnable `proof` command, so a skeptic doesn't trust our recomputed
+number — `scorecheck prove` re-derives it from the raw logs via `verity prove` (PASS) or REFUSEs.
 
 ## Honest scope
 - The novelty is **composition + the `reconcile` primitive applied to a claim-vs-raw-logs adjudication**
@@ -34,6 +39,7 @@ Exit code = verdict (`0` REPRODUCED · `1` DID-NOT-REPRODUCE · `2` CHERRY-PICKE
 - Float-free by construction (rates are integers ×10000), so a verdict is byte-reproducible and sealable.
 
 ## Status
-**G2 walking skeleton** — `adjudicate`/`verify` work end-to-end on a **real** SWE-bench results file.
+**G3 hardened** — `adjudicate`/`verify`/`recompute`/`prove` end-to-end on a **real** SWE-bench results file;
+4 thin harness adapters; proof-carrying verdicts (`verity prove`); 14 tests, 97% coverage; matrix CI (ubuntu+macos).
 The fuller fixtures suite, `verity prove` harness-re-run integration, and more adapters land in G3/G4.
 Part of the [StellarRequiem](https://github.com/StellarRequiem) verification cluster. Code MIT.

@@ -61,6 +61,82 @@ def test_seal_verify_roundtrip_and_tamper(tmp_path):
     assert not ok2
 
 
+# ---- G3: adapter generality (the kill-criterion: thin, no bespoke parsers) ----
+def test_csv_and_json_map_adapters_agree(tmp_path):
+    from scorecheck.adapters import csv as csv_adapter, json_map
+    (tmp_path / "r.csv").write_text("id,outcome\na,resolved\nb,unresolved\n")
+    (tmp_path / "r.json").write_text('{"a": "resolved", "b": "unresolved"}')
+    expected = {"a": "resolved", "b": "unresolved"}
+    assert csv_adapter(str(tmp_path / "r.csv")) == expected
+    assert json_map(str(tmp_path / "r.json")) == expected
+
+
+def test_jsonl_adapter_happy_and_bad_line(tmp_path):
+    import pytest
+    from scorecheck.adapters import jsonl, AdapterError
+    (tmp_path / "ok.jsonl").write_text('{"id":"a","outcome":"resolved"}\n\n{"id":"b","outcome":"x"}\n')
+    assert jsonl(str(tmp_path / "ok.jsonl")) == {"a": "resolved", "b": "x"}
+    (tmp_path / "bad.jsonl").write_text('{"id":"a"}\n')        # missing 'outcome'
+    with pytest.raises(AdapterError, match="line 1"):
+        jsonl(str(tmp_path / "bad.jsonl"))
+
+
+def test_adapter_errors_are_clean(tmp_path):
+    import pytest
+    from scorecheck.adapters import AdapterError, swebench, json_map, csv as csv_adapter
+    with pytest.raises(AdapterError, match="not found"):
+        swebench(str(tmp_path / "nope.json"))
+    (tmp_path / "bad.json").write_text('["not", "a", "map"]')
+    with pytest.raises(AdapterError, match="id: outcome"):
+        json_map(str(tmp_path / "bad.json"))
+    (tmp_path / "wrongcols.csv").write_text("id,result\na,resolved\n")   # no 'outcome' column
+    with pytest.raises(AdapterError, match="outcome"):
+        csv_adapter(str(tmp_path / "wrongcols.csv"))
+    (tmp_path / "notswe.json").write_text('{"foo": 1}')                  # missing generated/resolved
+    with pytest.raises(AdapterError, match="SWE-bench"):
+        swebench(str(tmp_path / "notswe.json"))
+
+
+def test_empty_logs_rate_is_zero():
+    assert rate_x10000({}, "resolved") == 0
+
+
+# ---- G3: proof-carrying (verity prove re-runs the recompute) ----
+def test_proof_claim_shape():
+    from scorecheck.adjudicate import build_proof_claim
+    card = adjudicate(honest_claim(), SRC)
+    pc = build_proof_claim(card, "fixtures/x.json", "swebench", "resolved")
+    assert pc["proof"].startswith("scorecheck recompute --logs fixtures/x.json")
+    assert pc["value"] == card["recomputed_from_source_x10000"] and pc["tolerance"] == 0
+
+
+def test_recompute_cli_emits_parseable_line(capsys):
+    from scorecheck.cli import main
+    assert main(["recompute", "--logs", str(FIX), "--harness", "swebench", "--positive", "resolved"]) == 0
+    out = capsys.readouterr().out
+    assert f"recomputed_x10000: {rate_x10000(SRC, 'resolved')}" in out
+
+
+def test_prove_passes_then_catches_a_number_that_does_not_rederive(tmp_path, monkeypatch):
+    """The flagship G3 loop: adjudicate seals a proof; `prove` re-runs `scorecheck recompute` via verity
+    and PASSES only if the sealed number actually re-derives from the raw logs — else REFUSE."""
+    import os, sys, json as _json
+    from scorecheck.cli import main
+    monkeypatch.setenv("PATH", os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"])
+    claim_f = tmp_path / "claim.json"
+    claim_f.write_text(_json.dumps(honest_claim()))
+    receipt = tmp_path / "r.json"
+    assert main(["adjudicate", "--claim", str(claim_f), "--logs", str(FIX), "--harness", "swebench",
+                 "--receipt", str(receipt), "--ledger", str(tmp_path / "l.jsonl")]) == 0
+    # honest number re-derives from the raw logs → PASS
+    assert main(["prove", "--receipt", str(receipt)]) == 0
+    # tamper the sealed number → the recompute no longer matches → REFUSE
+    r = _json.loads(receipt.read_text())
+    r["scorecard"]["recomputed_from_source_x10000"] += 500
+    receipt.write_text(_json.dumps(r))
+    assert main(["prove", "--receipt", str(receipt)]) == 2
+
+
 # ---- invariants ----
 def test_exit_code_ladder():
     assert (exit_code(REPRODUCED), exit_code(DID_NOT_REPRODUCE), exit_code(CHERRY_PICKED)) == (0, 1, 2)
