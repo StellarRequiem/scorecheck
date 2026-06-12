@@ -46,7 +46,8 @@ number — `scorecheck prove` re-derives it from the raw logs via `verity prove`
   guard, the number check is secondary. Outcome labels are normalised (case/whitespace) before comparison.
 
 ## Status
-**G3 hardened** — `adjudicate`/`verify`/`recompute`/`prove` end-to-end on a **real** SWE-bench results file;
-4 thin harness adapters; proof-carrying verdicts (`verity prove`); 14 tests, 97% coverage; matrix CI (ubuntu+macos).
-The fuller fixtures suite, `verity prove` harness-re-run integration, and more adapters land in G3/G4.
+**G4 verified** — `adjudicate`/`verify`/`recompute`/`prove` end-to-end on a **real** SWE-bench results file;
+4 thin harness adapters; proof-carrying verdicts (`verity prove`); 20 tests, 95% coverage; matrix CI (ubuntu+macos).
+Survived an independent 3-lens adversarial *Prove-It* pass — 4 reproduced break-classes (low-rate false-negative,
+cosmetic-label false-positive, seal-forgery, proof-swap) all fixed + regression-tested (see `G4-NOTES.md`).
 Part of the [StellarRequiem](https://github.com/StellarRequiem) verification cluster. Code MIT.

@@ -75,6 +75,14 @@ def _cmd_prove(args) -> int:
     """Re-run the sealed proof and PASS only if BOTH the number re-derives (via `verity prove`) AND it came
     from the SEALED source (the logs are bound by hash — G4: a swapped logs file with the same rate is caught)."""
     from verity import prove as verity_prove
+    # The sealed proof re-runs `scorecheck recompute …` as a subprocess, which resolves
+    # `scorecheck` via PATH. Make sure THIS scorecheck (the one the skeptic invoked — even
+    # via an un-activated venv path) is resolvable, so `prove` works regardless of how it
+    # was launched. The sealed (copy-pasteable) proof string is unchanged.
+    import os
+    _exe_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
+    if _exe_dir and _exe_dir not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = _exe_dir + os.pathsep + os.environ.get("PATH", "")
     sc = json.loads(Path(args.receipt).read_text(encoding="utf-8"))["scorecard"]
     if "proof" not in sc:
         print("REFUSE: receipt carries no proof command (re-run adjudicate to seal one)")
