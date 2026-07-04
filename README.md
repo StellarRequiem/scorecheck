@@ -7,8 +7,8 @@
 > artifact **re-runs** — but **none adjudicate a specific published claim against that claim's raw logs.**
 
 `scorecheck` does. Give it a published **claim** and the **raw run-logs**, and it returns one badge —
-**`REPRODUCED` · `DID-NOT-REPRODUCE` · `CHERRY-PICKED`** — sealed into a tamper-evident receipt anyone
-can re-derive.
+**`REPRODUCED` · `DID-NOT-REPRODUCE` · `CHERRY-PICKED`** — sealed into an integrity-checked receipt anyone
+can re-derive (an unkeyed hash that detects corruption, not a determined forger — see Honest scope).
 
 ## How
 It composes two primitives we already ship and a thin adapter:

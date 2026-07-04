@@ -46,7 +46,7 @@ def test_number_drift_is_did_not_reproduce():
     assert adjudicate(claim, SRC)["verdict"] == DID_NOT_REPRODUCE
 
 
-# ---- seal / verify (tamper-evidence) ----
+# ---- seal / verify (integrity: corruption/edit detection) ----
 def test_seal_verify_roundtrip_and_tamper(tmp_path):
     card = adjudicate(honest_claim(), SRC)
     receipt, ledger = tmp_path / "r.json", tmp_path / "l.jsonl"

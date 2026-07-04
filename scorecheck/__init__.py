@@ -1,7 +1,8 @@
 """scorecheck — adjudicate a published benchmark claim against its raw run-logs.
 
 Returns REPRODUCED / DID-NOT-REPRODUCE / CHERRY-PICKED by composing `calibration-log`'s reconcile
-(selective-reporting detection) with a metric recompute, sealed into a tamper-evident receipt.
+(selective-reporting detection) with a metric recompute, sealed into an integrity-checked receipt
+(an unkeyed hash — detects corruption, not a determined forger).
 """
 from .adapters import ADAPTERS, swebench, jsonl
 from .adjudicate import (adjudicate, exit_code, rate_x10000,
