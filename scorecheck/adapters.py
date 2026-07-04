@@ -66,4 +66,25 @@ def json_map(logs_path: str) -> dict:
     return {str(k): str(v) for k, v in raw.items()}
 
 
-ADAPTERS = {"swebench": swebench, "jsonl": jsonl, "csv": csv, "json_map": json_map}
+def json_array(logs_path: str) -> dict:
+    """Generic: a top-level JSON array of records, each carrying ``id`` + ``outcome`` → {id: outcome}.
+
+    Many harnesses emit one JSON array (``[{"id": ..., "outcome": ...}, ...]``) rather than
+    line-delimited JSONL; this is the array-shaped sibling of the ``jsonl`` adapter.
+    """
+    try:
+        raw = json.loads(_text(logs_path))
+        if not isinstance(raw, list):
+            raise TypeError("expected a JSON array of {id, outcome} records")
+        return {str(r["id"]): str(r["outcome"]) for r in raw}
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        raise AdapterError(f"not a JSON array of records with 'id' + 'outcome': {e}") from e
+
+
+ADAPTERS = {
+    "swebench": swebench,
+    "jsonl": jsonl,
+    "csv": csv,
+    "json_map": json_map,
+    "json_array": json_array,
+}

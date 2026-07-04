@@ -81,6 +81,27 @@ def test_jsonl_adapter_happy_and_bad_line(tmp_path):
         jsonl(str(tmp_path / "bad.jsonl"))
 
 
+def test_json_array_adapter_happy_and_bad(tmp_path):
+    import pytest
+    from scorecheck.adapters import json_array, json_map, AdapterError
+    expected = {"a": "resolved", "b": "unresolved"}
+    (tmp_path / "arr.json").write_text(
+        '[{"id":"a","outcome":"resolved"},{"id":"b","outcome":"unresolved"}]'
+    )
+    assert json_array(str(tmp_path / "arr.json")) == expected
+    # array-shaped sibling of jsonl agrees with json_map on the same logical content
+    (tmp_path / "map.json").write_text('{"a":"resolved","b":"unresolved"}')
+    assert json_array(str(tmp_path / "arr.json")) == json_map(str(tmp_path / "map.json"))
+    # a JSON object (not an array) is rejected cleanly
+    (tmp_path / "obj.json").write_text('{"id":"a","outcome":"resolved"}')
+    with pytest.raises(AdapterError, match="array"):
+        json_array(str(tmp_path / "obj.json"))
+    # a record missing 'outcome' is rejected cleanly
+    (tmp_path / "missing.json").write_text('[{"id":"a"}]')
+    with pytest.raises(AdapterError, match="id.*outcome"):
+        json_array(str(tmp_path / "missing.json"))
+
+
 def test_adapter_errors_are_clean(tmp_path):
     import pytest
     from scorecheck.adapters import AdapterError, swebench, json_map, csv as csv_adapter

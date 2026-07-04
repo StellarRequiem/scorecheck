@@ -1,0 +1,54 @@
+name: clean-clone
+
+# Proves scorecheck works from a RECIPIENT'S EMPTY ENVIRONMENT: a fresh `git clone`
+# of the pushed repo into a scratch dir, a fresh venv, install, tests, and the full
+# adjudicate → verify → prove → flag demo — nothing carried over from the build host.
+# Distinct from ci.yml (which uses actions/checkout on the workspace): this re-clones
+# from origin so a would-be user's from-scratch path is exercised end-to-end.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  from-empty-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fresh clone into a scratch dir (recipient's empty env)
+        run: |
+          set -eux
+          git clone --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" "${RUNNER_TEMP}/clean"
+
+      - name: Fresh venv + install (git-pinned verity-core + calibration-log resolve from the pins)
+        working-directory: ${{ runner.temp }}/clean
+        run: |
+          set -eux
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Unit tests
+        working-directory: ${{ runner.temp }}/clean
+        run: |
+          set -eux
+          . .venv/bin/activate
+          pytest -q
+
+      - name: Demo — honest REPRODUCED (exit 0), verify + proof re-run, doctored CHERRY-PICKED (exit 2)
+        working-directory: ${{ runner.temp }}/clean
+        run: |
+          set -eux
+          . .venv/bin/activate
+          scorecheck adjudicate --claim fixtures/claim_honest.json --logs fixtures/swebench_rag_gpt4_results.json --harness swebench --receipt "${RUNNER_TEMP}/h.json"
+          scorecheck verify --receipt "${RUNNER_TEMP}/h.json"
+          scorecheck prove  --receipt "${RUNNER_TEMP}/h.json"
+          scorecheck adjudicate --claim fixtures/claim_doctored.json --logs fixtures/swebench_rag_gpt4_results.json --harness swebench --receipt "${RUNNER_TEMP}/d.json" \
+            && { echo "doctored should have exited 2"; exit 1; } \
+            || echo "doctored correctly flagged (exit 2)"
+          scorecheck verify --receipt "${RUNNER_TEMP}/d.json"

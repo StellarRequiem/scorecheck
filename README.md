@@ -27,7 +27,7 @@ scorecheck prove   --receipt receipt.json    # proof-carrying: re-runs the recom
 ```
 Exit code = verdict (`0` REPRODUCED · `1` DID-NOT-REPRODUCE · `2` CHERRY-PICKED) — gate it in CI.
 
-Harness adapters (raw logs → `{id: outcome}`), all deliberately thin: `swebench` · `jsonl` · `csv` · `json_map`.
+Harness adapters (raw logs → `{id: outcome}`), all deliberately thin: `swebench` · `jsonl` · `csv` · `json_map` · `json_array`.
 **Proof-carrying:** the receipt seals a re-runnable `proof` command, so a skeptic doesn't trust our recomputed
 number — `scorecheck prove` re-derives it from the raw logs via `verity prove` (PASS) or REFUSEs.
 
